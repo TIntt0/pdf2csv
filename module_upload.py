@@ -64,9 +64,17 @@ def upload():
         doi_match = re.search(r"10\.[0-9a-zA-Z\/\.]+", md_text)
         if doi_match:
             doi = doi_match.group(0).strip().rstrip(".")
-        year_match = re.search(r"\b\d{4}\b", md_text)
-        if year_match:
-            year = year_match.group(0)
+        year = ""
+        year_context_match = re.search(
+            r'(?:Published|Accepted|published|accepted|Received|received|Date|date|Year|year)[^\n]{0,30}?\b((?:19|20)\d{2})\b',
+            md_text
+        )
+        if year_context_match:
+            year = year_context_match.group(1)
+        else:
+            year_fallback = re.search(r'\b((?:19|20)\d{2})\b', md_text)
+            if year_fallback:
+                year = year_fallback.group(1)
 
         # 提取图片、模板列
         images = get_valid_images(fid)
