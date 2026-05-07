@@ -109,7 +109,22 @@ def chat():
     prompt = data.get("prompt", "")
     img_name = data.get("img", "")
 
-    content = [{"type": "text", "text": prompt}]
+    md_content = ""
+    md_path = os.path.join(OUTPUT_FOLDER, fid, "auto", f"{fid}.md")
+    if os.path.exists(md_path):
+        with open(md_path, "r", encoding="utf-8") as f:
+            md_content = f.read()[:5000]
+
+    system_prompt = f"""你是一位专业的化学文献分析助手。以下是从PDF提取的Markdown内容，请基于此内容回答问题：
+
+---
+{md_content}
+---
+
+请根据以上内容回答问题，如果内容中没有相关信息，请说明"根据当前文档，无法回答此问题。"。
+"""
+
+    content = [{"type": "text", "text": system_prompt + "\n\n问题：" + prompt}]
     if img_name:
         img_path = os.path.join(OUTPUT_FOLDER, fid, "auto", "images", img_name)
         if os.path.exists(img_path):

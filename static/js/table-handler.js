@@ -420,19 +420,16 @@ function renderManualSupplement(t) {
             html += `
                 <div class="card mb-2 border-secondary">
                     <div class="card-body p-2">
-                        <div class="row g-2">
-                            <div class="col-md-8">
-                                <input type="text" class="form-control form-control-sm" 
-                                       value="${escapeHtmlAttr(supp.value)}"
-                                       onchange="updateSupplementValue(${t.table_id}, ${idx}, this.value)"
-                                       placeholder="编辑填充值">
-                            </div>
-                            <div class="col-md-4 d-flex align-items-center justify-content-end">
-                                <span class="fw-bold small me-2 text-truncate" style="max-width: 100px;" title="${escapeHtmlAttr(supp.column)}">${escapeHtml(supp.column)}</span>
-                                <button class="btn btn-sm btn-outline-danger" onclick="removeManualSupplement(${t.table_id}, ${idx})">
-                                    ✕
-                                </button>
-                            </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="text" class="form-control form-control-sm flex-shrink-0" 
+                                   style="width: 200px; flex-grow: 0;"
+                                   value="${escapeHtmlAttr(supp.value)}"
+                                   onchange="updateSupplementValue(${t.table_id}, ${idx}, this.value)"
+                                   placeholder="值">
+                            <span class="fw-bold small text-truncate flex-grow-1 text-right" style="min-width: 0; text-align: right;" title="${escapeHtmlAttr(supp.column)}">${escapeHtml(supp.column)}</span>
+                            <button class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="removeManualSupplement(${t.table_id}, ${idx})">
+                                ✕
+                            </button>
                         </div>
                     </div>
                 </div>

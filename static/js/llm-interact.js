@@ -1,3 +1,5 @@
+let analysisTimerInterval = null;
+
 function runLLMAnalyse() {
     if (!fid) {
         alert('请先上传PDF');
@@ -20,6 +22,18 @@ function runLLMAnalyse() {
     const output = document.getElementById('llmOutput');
     output.innerHTML = '<div class="text-center text-muted">⏳ 正在分析，请稍候...</div>';
 
+    const timerEl = document.getElementById('analysisTimer');
+    const startTime = Date.now();
+    
+    if (analysisTimerInterval) {
+        clearInterval(analysisTimerInterval);
+    }
+    
+    analysisTimerInterval = setInterval(() => {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        timerEl.textContent = `已分析 ${elapsed} 秒`;
+    }, 500);
+
     fetch('/llm/analyse', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -32,13 +46,23 @@ function runLLMAnalyse() {
     })
     .then(res => res.json())
     .then(data => {
+        const endTime = Date.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(1);
+        timerEl.textContent = `分析完成，共 ${duration} 秒`;
         output.innerHTML = highlightConditions(data.result);
         renderMathContent(output);
     })
     .catch(err => {
+        const endTime = Date.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(1);
+        timerEl.textContent = `分析失败，耗时 ${duration} 秒`;
         output.innerHTML = `<div class="text-danger">分析失败：${err.message}</div>`;
     })
     .finally(() => {
+        if (analysisTimerInterval) {
+            clearInterval(analysisTimerInterval);
+            analysisTimerInterval = null;
+        }
         btn.disabled = false;
         btn.innerHTML = '🔍 开始分析';
     });
@@ -166,7 +190,7 @@ function onNoteSelectChange() {
     const option = select.options[select.selectedIndex];
     if (option && option.value) {
         const note = option.getAttribute('data-note') || '';
-        textarea.value = decodeHtmlEntities(note);
+        textarea.value = cleanNoteDisplay(decodeHtmlEntities(note));
     }
 }
 
@@ -182,8 +206,27 @@ function decodeHtmlEntities(text) {
     return textarea.value;
 }
 
+function cleanNoteDisplay(text) {
+    if (!text) return '';
+    
+    let result = text;
+    
+    result = result.replace(/\\mathbf\{([^}]+)\}/g, '$1');
+    result = result.replace(/\\mathrm\{([^}]+)\}/g, '$1');
+    result = result.replace(/\\text[a-z]*\{([^}]+)\}/gi, '$1');
+    result = result.replace(/\\circ/g, '°');
+    result = result.replace(/\\s/g, ' ');
+    result = result.replace(/\{|\}/g, '');
+    result = result.replace(/\$\$([^$]+)\$\$/g, '$1');
+    result = result.replace(/\$([^$]+)\$/g, '$1');
+    result = result.replace(/\s+/g, ' ');
+    
+    return result.trim();
+}
+
 function clearLLMOutput() {
     document.getElementById('llmOutput').innerHTML = '<div class="text-muted text-center">等待分析结果...</div>';
+    document.getElementById('analysisTimer').textContent = '';
 }
 
 function updateLLMImageSelect() {
