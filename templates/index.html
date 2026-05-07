@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>PDF解析系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h3 class="mb-4 text-center">PDF解析系统（MinerU 命令行 + LLM图片分析）</h3>
+
+    <!-- 上传PDF + 解析 -->
+    <div class="card border-primary">
+        <h5 class="card-title">上传PDF并解析</h5>
+        <div class="row">
+            <div class="col-md-8">
+                <input type="file" id="pdfFile" accept=".pdf" class="form-control mb-2">
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100" onclick="startParse()">开始解析</button>
+            </div>
+        </div>
+        <div class="mt-2">
+            <div class="progress">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width:0%">0%</div>
+            </div>
+        </div>
+        <div class="mt-2 p-2 bg-light" id="progressText">等待上传...</div>
+        <div id="timeUsed" class="text-secondary small">已用时：0 秒</div>
+    </div>
+
+    
+    <!--  PDF 预览 & 提取图片（可选择部分显示）-->
+    <div class="card border-success">
+        <h5 class="card-title">PDF预览 & 提取图片（可选择部分图片显示）</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>📄 PDF 原文（固定显示）</h6>
+                <div id="pdfPreviewArea" style="height:400px; border:1px solid #ddd; padding:10px; overflow:auto;">
+                    请上传PDF后查看
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6>🖼️ 提取图片
+                    <button class="btn btn-sm btn-primary ms-2" onclick="showOnlySelected()">只显示选中</button>
+                    <button class="btn btn-sm btn-outline-secondary ms-1" onclick="showAllImages()">显示全部</button>
+                </h6>
+                <div id="imagePanel" style="height:400px; border:1px solid #ddd; padding:10px; overflow:auto;">
+                    <div id="imageList" class="d-flex flex-wrap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 表格提取 + 列映射 -->
+    <div class="card border-secondary">
+        <h5 class="card-title">提取表格 & 列映射配置</h5>
+        <div class="mb-3" id="tableNav"></div>
+        <div class="row">
+            <!-- 左侧：原表格和LLM补充表格预览 -->
+            <div class="col-md-6">
+                <div class="card mb-2">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <span>📋 原始表格</span>
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary" id="originalBtn" onclick="toggleTableView('original')">原始</button>
+                                <button type="button" class="btn btn-primary" id="splitBtn" onclick="toggleTableView('fixed')">修正后</button>
+                            </div>
+                            <button type="button" class="btn btn-success btn-sm" id="confirmTableBtn" onclick="confirmTableVersion()">确定</button>
+                        </div>
+                    </div>
+                    <div class="card-body p-3" id="tablePreview" style="max-height: 300px; overflow: auto;">
+                        <div class="text-center text-muted">请先上传PDF</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header bg-light">🔄 LLM补充表格 <button class="btn btn-sm btn-outline-primary ms-2" onclick="openGenerateSupplementModal()">生成</button></div>
+                    <div class="card-body p-3" id="supplementTablePreview" style="max-height: 300px; overflow: auto;">
+                        <div class="text-center text-muted">暂无补充表格，点击生成按钮创建</div>
+                    </div>
+                </div>
+            </div>
+            <!-- 右侧：列映射配置 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-light">🔗 列映射配置</div>
+                    <div class="card-body p-3" id="mapConfig" style="max-height: 620px; overflow: auto;">
+                        <div class="text-center text-muted">请先上传PDF</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 下方：LLM输入选择（左）和手动补充列（右） -->
+        <div class="row mt-4">
+            <!-- 左侧：LLM输入选择 -->
+            <div class="col-md-6">
+                <div class="card bg-light">
+                    <div class="card-header">📥 LLM输入选择</div>
+                    <div class="card-body">
+                        <!-- 当前表格信息 -->
+                        <div id="llmTableContext" class="mb-3"></div>
+                        
+                        <!-- 图片选择 -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">🖼️ 选择图片</label>
+                            <select id="llmImageSelect" class="form-select mb-2">
+                                <option value="">-- 不选择图片 --</option>
+                            </select>
+                            <div id="llmSelectedImgPreview" class="text-center"></div>
+                        </div>
+
+                        <!-- 表注选择 -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">📝 表注信息</label>
+                            <select id="llmNoteSelect" class="form-select mb-2" onchange="onNoteSelectChange()">
+                                <option value="">-- 不选择表注 --</option>
+                            </select>
+                            <textarea id="llmNoteInput" class="form-control" rows="3" placeholder="选择的表注会显示在这里，可手动编辑..."></textarea>
+                        </div>
+
+                        <!-- 自定义提示词 -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">✏️ 自定义提示词（可选）</label>
+                            <textarea id="llmCustomPrompt" class="form-control" rows="2" placeholder="例如：只提取催化剂名称"></textarea>
+                        </div>
+
+                        <!-- 操作按钮 -->
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="runLLMAnalyse()" id="llmAnalyseBtn">
+                                🔍 开始分析
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="runExtractFromNote()" id="extractNoteBtn">
+                                📄 仅从表注提取
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 右侧：未映射列 + 手动补充列 -->
+            <div class="col-md-6">
+                <!-- 未映射列 -->
+                <div class="card mb-2">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                        <span>📋 未映射列</span>
+                        <button class="btn btn-sm btn-primary" onclick="detectUnmapped()">检测未映射列</button>
+                    </div>
+                    <div class="card-body p-3" id="unmappedCols" style="max-height: 200px; overflow-y: auto;">
+                        <div class="text-muted text-center">点击"检测未映射列"查看</div>
+                    </div>
+                </div>
+                <!-- 手动补充列 -->
+                <div class="card">
+                    <div class="card-header bg-light">✏️ 手动补充列</div>
+                    <div class="card-body p-3" id="manualSupplementConfig" style="max-height: 300px; overflow: auto;">
+                        <div class="text-center text-muted">请先上传PDF</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-success mt-3" id="saveMapBtn" onclick="saveCurrentMap()" disabled>保存当前表格映射</button>
+    </div>
+
+
+    <!-- LLM 分析与对话 -->
+    <div class="card border-warning">
+        <h5 class="card-title">LLM 分析与对话</h5>
+        <div class="row">
+            <!-- LLM 分析结果 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>📤 分析结果</span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearLLMOutput()">清空</button>
+                    </div>
+                    <div class="card-body">
+                        <div id="llmOutput" class="p-3 bg-white border rounded" style="min-height:300px;max-height:400px;overflow-y:auto;">
+                            <div class="text-muted text-center">等待分析结果...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- LLM 对话 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">💬 继续对话</div>
+                    <div class="card-body">
+                        <div class="chat-box" id="chatBox" style="min-height:300px;max-height:400px;"></div>
+                        <div class="input-group mt-2">
+                            <input type="text" id="chatInput" class="form-control" placeholder="输入后续问题...">
+                            <button class="btn btn-primary" onclick="sendChat()" id="chatBtn">发送</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CSV导出 -->
+        <div class="mt-3">
+            <button class="btn btn-warning w-100" onclick="exportCSV()" id="exportBtn">
+                📥 导出CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- 表格编辑与预览 -->
+    <div class="card border-info mt-4">
+        <h5 class="card-title">📊 表格编辑与预览</h5>
+        <div class="mb-3">
+            <label class="form-label fw-bold">选择表格编辑</label>
+            <div id="editTableNav" class="mb-3"></div>
+        </div>
+        <div class="row mb-3"></div>
+        <div class="mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>📝 编辑表格数据</span>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-success" onclick="applyLLMToTable()">LLM自动填充</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="saveEditedTable()">保存</button>
+                    </div>
+                </div>
+                <div class="card-body" style="max-height: 500px; overflow-x:auto;">
+                    <div id="editTablePreview" class="text-center text-muted">
+                        请先选择要编辑的表格
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <span>📈 最终CSV预览</span>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="refreshCSVPreview()">刷新预览</button>
+                            <button class="btn btn-sm btn-success" onclick="exportFinalCSV()">导出最终CSV</button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-x:auto;">
+                        <div id="finalCSVPreview" class="text-center text-muted">
+                            预览将在表格数据加载后显示
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS 按顺序引入 -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pdf-parser.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/table-handler.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/image-handler.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/llm-interact.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/table-edit.js') }}"></script>
+
+    <!-- 生成LLM补充表格模态框 -->
+    <div class="modal fade" id="generateSupplementModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">🔄 生成LLM补充表格</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">📝 输入文本/表注</label>
+                        <textarea id="supplementNoteInput" class="form-control" rows="5" placeholder="在此输入要分析的文本、表注或实验条件描述..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">✏️ 自定义提示词（可选）</label>
+                        <textarea id="supplementCustomPrompt" class="form-control" rows="2" placeholder="例如：重点提取温度、压力和催化剂信息"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="generateSupplementBtn" onclick="generateSupplementTable()">生成补充表格</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

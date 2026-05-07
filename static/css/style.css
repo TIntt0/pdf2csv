@@ -1,0 +1,57 @@
+body { padding: 30px; max-width: 1400px; margin: auto; }
+.card { margin-bottom: 20px; padding: 15px; }
+.img-sm { max-height: 80px; cursor: pointer; margin: 4px; border-radius: 6px; }
+.img-active { border: 3px solid #0d6efd; }
+.img-selected { border: 3px solid #28a745; }
+.progress { height: 20px; }
+
+.chat-box {
+    height: 220px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    background: #fafafa;
+    margin-bottom: 10px;
+    border-radius: 6px;
+}
+.chat-user { text-align: right; margin-bottom: 8px; }
+.chat-bot { text-align: left; margin-bottom: 8px; }
+.chat-user span {
+    background: #0d6efd; color: white; padding: 6px 10px; border-radius: 8px;
+    display: inline-block; max-width: 80%;
+}
+.chat-bot span {
+    background: #e9ecef; padding: 6px 10px; border-radius: 8px;
+    display: inline-block; max-width: 80%; white-space: pre-wrap;
+}
+.katex { font-size: 1em !important; vertical-align: middle; }
+/* 图片容器自适应 */
+#imageList {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-start;
+}
+
+/* 缩略图（显示全部时用） */
+.img-sm {
+    max-height: 80px;
+    cursor: pointer;
+    margin: 4px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+}
+.img-selected {
+    border: 3px solid #28a745;
+}
+
+/* 选中后显示的大图：自适应容器 */
+.img-large {
+    max-width: 100%;
+    max-height: 300px; /* 限制最大高度，防止撑爆 */
+    height: auto;      /* 高度随宽度自动变化 */
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    display: block;    /* 去掉图片下方默认间隙 */
+}
