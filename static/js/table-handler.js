@@ -290,6 +290,14 @@ async function saveCurrentMap() {
         }
         
         alert('保存成功');
+        
+        // 刷新表格预览
+        if (typeof refreshPreview === 'function') {
+            refreshPreview();
+        }
+        if (typeof refreshEditTable === 'function') {
+            refreshEditTable();
+        }
     } catch (err) {
         alert('保存失败');
         console.error(err);

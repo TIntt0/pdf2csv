@@ -5,16 +5,16 @@ let columnUnitSelections = {};
 let llmGeneratedData = null;
 
 const unitPatterns = [
-    { regex: /\(mg\)/, unit: 'mg' },
-    { regex: /\(mmol\)/, unit: 'mmol' },
-    { regex: /\(eq\)/, unit: 'eq' },
-    { regex: /\(uL\)/, unit: 'uL' },
-    { regex: /\(mL\)/, unit: 'mL' },
-    { regex: /\(%\)/, unit: '%' },
-    { regex: /\(h\)/, unit: 'h' },
-    { regex: /\(c\)/, unit: 'c' },
-    { regex: /\(atm\)/, unit: 'atm' },
-    { regex: /\(nm\)/, unit: 'nm' },
+    { regex: /[\(\[]mg[\)\]]/, unit: 'mg' },
+    { regex: /[\(\[]mmol[\)\]]/, unit: 'mmol' },
+    { regex: /[\(\[]eq[\)\]]/, unit: 'eq' },
+    { regex: /[\(\[]uL[\)\]]/, unit: 'uL' },
+    { regex: /[\(\[]mL[\)\]]/, unit: 'mL' },
+    { regex: /[\(\[]%[\)\]]/, unit: '%' },
+    { regex: /[\(\[]h[\)\]]/, unit: 'h' },
+    { regex: /[\(\[]c[\)\]]/, unit: 'c' },
+    { regex: /[\(\[]atm[\)\]]/, unit: 'atm' },
+    { regex: /[\(\[]nm[\)\]]/, unit: 'nm' },
 ];
 
 function getColumnBaseName(col) {
@@ -295,7 +295,10 @@ function renderEditTable() {
 
     const firstFourCols = templateCols.slice(0, 4);
     const remainingCols = templateCols.slice(4);
-    const colGroups = groupColumnsByBaseName(remainingCols);
+    
+    const supplementCols = manualSupplements.map(s => s.column);
+    const allRemainingCols = [...remainingCols, ...supplementCols];
+    const colGroups = groupColumnsByBaseName(allRemainingCols);
 
     let theadHtml = '<tr>';
     for (let i = 0; i < firstFourCols.length; i++) {

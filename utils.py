@@ -337,7 +337,7 @@ def auto_map_columns(headers, template_cols):
                     break
 
         # ===================== 2. 再匹配yield =====================
-        elif "yield" in h_clean or ("%" in header and "product" in h_clean):
+        elif "yield" in h_clean or "conversion" in h_clean or ("%" in header and "product" in h_clean):
             for col in template_cols:
                 col_lower = col.lower()
                 # 必须同时包含yield和%，且不能包含ee，避免交叉匹配

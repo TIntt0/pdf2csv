@@ -44,18 +44,28 @@ function runLLMAnalyse() {
             custom_prompt: custom
         })
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+    })
     .then(data => {
         const endTime = Date.now();
         const duration = ((endTime - startTime) / 1000).toFixed(1);
         timerEl.textContent = `分析完成，共 ${duration} 秒`;
-        output.innerHTML = highlightConditions(data.result);
-        renderMathContent(output);
+        if (data && data.result) {
+            output.innerHTML = highlightConditions(data.result);
+            renderMathContent(output);
+        } else {
+            output.innerHTML = '<div class="text-danger">分析失败：未返回结果</div>';
+        }
     })
     .catch(err => {
         const endTime = Date.now();
         const duration = ((endTime - startTime) / 1000).toFixed(1);
         timerEl.textContent = `分析失败，耗时 ${duration} 秒`;
+        console.error('LLM分析错误:', err);
         output.innerHTML = `<div class="text-danger">分析失败：${err.message}</div>`;
     })
     .finally(() => {
@@ -252,9 +262,7 @@ function addMessage(role, text) {
     const box = document.getElementById('chatBox');
     const div = document.createElement('div');
     div.className = role === 'user' ? 'chat-user' : 'chat-bot';
-    const span = document.createElement('span');
-    span.innerText = text;
-    div.appendChild(span);
+    div.innerHTML = renderMarkdown(escapeHtml(text));
     box.appendChild(div);
     renderMathContent(div);
     box.scrollTop = box.scrollHeight;
@@ -283,11 +291,21 @@ function sendChat() {
             prompt: msg
         })
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+    })
     .then(data => {
-        addMessage('bot', data.reply);
+        if (data && data.reply) {
+            addMessage('bot', data.reply);
+        } else {
+            addMessage('bot', '未返回回复内容');
+        }
     })
     .catch(err => {
+        console.error('聊天错误:', err);
         addMessage('bot', '请求失败：' + err.message);
     });
 }
