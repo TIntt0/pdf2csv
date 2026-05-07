@@ -178,9 +178,72 @@ def extract_from_note():
         return jsonify({"result": f"提取失败：{str(e)}"})
 
 
+def extract_conditions_from_note(note_text):
+    """从表注中提取固定条件"""
+    conditions = {}
+    
+    note_text = note_text.replace('；', ';').replace('，', ',').replace('。', '.')
+    
+    # 提取压力 (bar/atm/psi)
+    pressure_match = re.search(r'(\d+\.?\d*)\s*(bar|atm|psi)', note_text, re.IGNORECASE)
+    if pressure_match:
+        value = float(pressure_match.group(1))
+        unit = pressure_match.group(2).lower()
+        # 转换为 atm
+        if unit == 'bar':
+            value = value * 0.986923
+        elif unit == 'psi':
+            value = value * 0.068046
+        conditions['Step Pressure (atm) 1'] = f"{value:.2f}"
+    
+    # 提取温度 (°C/C/k/K)
+    temp_match = re.search(r'(\d+)\s*°?\s*[CcKk]', note_text)
+    if temp_match:
+        temp_value = temp_match.group(1)
+        conditions['Step Temperature (C) 1'] = temp_value
+    
+    # 提取时间 (h/min/s)
+    time_match = re.search(r'(\d+\.?\d*)\s*(h|hour|min|minute|s|second)', note_text, re.IGNORECASE)
+    if time_match:
+        time_value = time_match.group(1)
+        time_unit = time_match.group(2).lower()
+        if time_unit in ['min', 'minute']:
+            time_value = str(float(time_value) / 60)
+        elif time_unit in ['s', 'second']:
+            time_value = str(float(time_value) / 3600)
+        conditions['Step Reaction Time (h) 1'] = time_value
+    
+    # 提取气氛 (H2/N2/Ar/空气等)
+    atmosphere_patterns = ['H2', 'hydrogen', 'N2', 'nitrogen', 'Ar', 'argon', 'air', 'O2', 'oxygen']
+    for gas in atmosphere_patterns:
+        if gas.lower() in note_text.lower():
+            conditions['Step Atmosphere 1'] = gas
+            break
+    
+    # 提取溶剂
+    solvent_match = re.search(r'solvent\s*[::=]\s*([^;,.]+)', note_text, re.IGNORECASE)
+    if not solvent_match:
+        solvent_match = re.search(r'solvent:\s*([^;,.]+)', note_text, re.IGNORECASE)
+    if not solvent_match:
+        solvent_match = re.search(r';\s*([^;,.]+solvent[^;,.]+)', note_text, re.IGNORECASE)
+    if solvent_match:
+        conditions['Solvent Name 1'] = solvent_match.group(1).strip()
+    
+    # 提取催化剂
+    catalyst_match = re.search(r'(catalyst|cat)\s*[::=]\s*([^;,.]+)', note_text, re.IGNORECASE)
+    if catalyst_match:
+        conditions['Catalyst Name 1'] = catalyst_match.group(2).strip()
+    
+    # 提取配体
+    ligand_match = re.search(r'(ligand|L)\s*[::=]\s*([^;,.]+)', note_text, re.IGNORECASE)
+    if ligand_match:
+        conditions['Catalyst Ligand Name 1'] = ligand_match.group(2).strip()
+    
+    return conditions
+
 @llm_bp.route('/generate_supplement_table', methods=['POST'])
 def generate_supplement_table():
-    """生成LLM补充表格：从文本/图注中提取固定条件"""
+    """生成补充表格：从表注中提取固定条件"""
     data = request.json
     fid = data.get("fid", "")
     tid = data.get("tid", 0)
@@ -193,75 +256,43 @@ def generate_supplement_table():
     if not temp_data:
         return jsonify({"status": "error", "msg": "数据不存在"}), 400
 
+    conditions = extract_conditions_from_note(note_text)
+    
+    if not conditions:
+        return jsonify({"status": "error", "msg": "未能从表注中提取到任何条件"})
+    
+    supplement_columns = list(conditions.keys())
+    supplement_values = conditions
+    
+    # 生成补充表格数据
+    supplement_data = []
+    for _ in range(row_count):
+        row = {}
+        for col in supplement_columns:
+            row[col] = supplement_values.get(col, "")
+        supplement_data.append(row)
+
+    # 获取模板列名用于自动映射
     template_cols = get_template_cols()
-    json_cols = [col for col in template_cols[4:]]
+    
+    # 自动映射：如果补充列名在模板列中存在，则自动映射
+    supplement_auto_map = {}
+    for col in supplement_columns:
+        if col in template_cols:
+            supplement_auto_map[col] = col
+    
+    # 保存到临时数据中
+    for t in temp_data.get("tables", []):
+        if t.get("table_id") == tid:
+            t["supplement_headers"] = supplement_columns
+            t["supplement_data_rows"] = supplement_data
+            t["supplement_auto_map"] = supplement_auto_map  # 自动映射
+            t["supplement_manual_map"] = {}  # 补充表的手动映射
+            break
 
-    prompt_parts = []
-    prompt_parts.append("你是一位专业的化学文献数据提取助手。")
-    prompt_parts.append("请从以下文本/表注中提取化学反应的固定条件（即所有行都相同的条件）：")
-
-    if note_text:
-        prompt_parts.append(f"\n文本内容：{note_text}")
-    if custom_prompt:
-        prompt_parts.append(f"\n额外要求：{custom_prompt}")
-
-    prompt_parts.append(f"""
-可用的列名有：{json_cols}
-重要：这些条件对所有反应行都是相同的（固定值）。
-
-请严格按以下JSON格式返回，不要有任何其他文字说明：
-{{
-    "supplement_columns": ["列名1", "列名2", ...],
-    "supplement_values": {{
-        "列名1": "值1",
-        "列名2": "值2"
-    }}
-}}
-
-如果没有找到合适的固定条件，返回：
-{{
-    "supplement_columns": [],
-    "supplement_values": {{}}
-}}
-""")
-
-    try:
-        client = get_openai_client()
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[{"role": "user", "content": "\n".join(prompt_parts)}],
-            max_tokens=3000,
-            temperature=0
-        )
-        result_text = response.choices[0].message.content
-
-        # 解析返回的JSON
-        import json
-        result = json.loads(result_text)
-        
-        # 生成补充表格数据
-        supplement_data = []
-        for _ in range(row_count):
-            row = {}
-            for col in result.get("supplement_columns", []):
-                row[col] = result.get("supplement_values", {}).get(col, "")
-            supplement_data.append(row)
-
-        # 保存到临时数据中
-        for t in temp_data.get("tables", []):
-            if t.get("table_id") == tid:
-                t["supplement_headers"] = result.get("supplement_columns", [])
-                t["supplement_data_rows"] = supplement_data
-                t["supplement_auto_map"] = {}  # 补充表的自动映射
-                t["supplement_manual_map"] = {}  # 补充表的手动映射
-                break
-
-        return jsonify({
-            "status": "success",
-            "supplement_headers": result.get("supplement_columns", []),
-            "supplement_data": supplement_data
-        })
-    except json.JSONDecodeError as e:
-        return jsonify({"status": "error", "msg": f"JSON解析失败：{str(e)}\n原始返回：{result_text}"}), 400
-    except Exception as e:
-        return jsonify({"status": "error", "msg": f"生成失败：{str(e)}"}), 400
+    return jsonify({
+        "status": "success",
+        "supplement_headers": supplement_columns,
+        "supplement_data": supplement_data,
+        "supplement_auto_map": supplement_auto_map
+    })

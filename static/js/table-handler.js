@@ -362,7 +362,7 @@ function generateSupplementTable() {
             if (tableIndex !== -1) {
                 tables[tableIndex].supplement_headers = data.supplement_headers;
                 tables[tableIndex].supplement_data_rows = data.supplement_data;
-                tables[tableIndex].supplement_auto_map = {};
+                tables[tableIndex].supplement_auto_map = data.supplement_auto_map || {};
                 tables[tableIndex].supplement_manual_map = {};
                 
                 // 重新渲染

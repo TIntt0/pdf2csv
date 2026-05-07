@@ -87,9 +87,10 @@ def generate():
                     supp_row = table["supplement_data_rows"][idx - 1]
                     for supp_col, template_col in supplement_map.items():
                         if supp_col in supp_row and template_col in cols:
-                            # 如果原表没有数据，或者补充表有数据，使用补充表数据
-                            if not out_row.get(template_col) or supp_row.get(supp_col):
-                                out_row[template_col] = clean_markdown_format(supp_row[supp_col])
+                            # 如果补充表有实际数据，优先使用补充表数据
+                            supp_value = supp_row.get(supp_col, "").strip()
+                            if supp_value:
+                                out_row[template_col] = clean_markdown_format(supp_value)
 
                 all_rows.append(out_row)
         else:
@@ -109,9 +110,11 @@ def generate():
                 if "supplement_data_rows" in table and idx <= len(table["supplement_data_rows"]):
                     supp_row = table["supplement_data_rows"][idx - 1]
                     for supp_col, template_col in supplement_map.items():
-                        # 如果原表没有数据，或者补充表有数据，使用补充表数据
-                        if not out_row.get(template_col) or supp_row.get(supp_col):
-                            out_row[template_col] = clean_markdown_format(supp_row[supp_col])
+                        if supp_col in supp_row and template_col in cols:
+                            # 如果补充表有实际数据，优先使用补充表数据
+                            supp_value = supp_row.get(supp_col, "").strip()
+                            if supp_value:
+                                out_row[template_col] = clean_markdown_format(supp_value)
 
                 all_rows.append(out_row)
 
