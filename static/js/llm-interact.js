@@ -310,7 +310,7 @@ function sendChat() {
     });
 }
 
-function exportCSV() {
+async function exportCSV() {
     if (!fid) {
         alert('请先上传PDF');
         return;
@@ -320,12 +320,34 @@ function exportCSV() {
     btn.disabled = true;
     btn.innerHTML = '⏳ 导出中...';
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/export/generate';
-    form.innerHTML = `<input type="hidden" name="fid" value="${fid}">`;
-    document.body.appendChild(form);
-    form.submit();
+    try {
+        for (const t of tables) {
+            if (t.supplement_data_rows && t.supplement_data_rows.length > 0) {
+                await fetch('/table/save_supplements', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        fid: fid,
+                        tid: t.table_id,
+                        supplements: t.manual_supplements || [],
+                        supplement_data_rows: t.supplement_data_rows || [],
+                        supplement_headers: t.supplement_headers || [],
+                        supplement_auto_map: t.supplement_auto_map || {},
+                        supplement_manual_map: t.supplement_manual_map || {}
+                    })
+                });
+            }
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/export/generate';
+        form.innerHTML = `<input type="hidden" name="fid" value="${fid}">`;
+        document.body.appendChild(form);
+        form.submit();
+    } catch (err) {
+        console.error('导出前保存失败:', err);
+    }
 
     setTimeout(() => {
         btn.disabled = false;

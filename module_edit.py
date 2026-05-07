@@ -99,7 +99,12 @@ def generate_from_edited():
 
                 all_rows.append(out_row)
         else:
-            final_map = {**table["auto_map"], **table["manual_map"]}
+            final_map = {
+                **table.get("auto_map", {}),
+                **table.get("manual_map", {}),
+                **table.get("supplement_auto_map", {}),
+                **table.get("supplement_manual_map", {})
+            }
             
             # 确定使用哪个版本的数据
             use_original = table.get("use_original", False)
@@ -115,6 +120,11 @@ def generate_from_edited():
                             row[h] = data_list[i]
                         else:
                             row[h] = ""
+                    
+                    if "supplement_data_rows" in table and idx <= len(table["supplement_data_rows"]):
+                        supp_row = table["supplement_data_rows"][idx - 1]
+                        if isinstance(supp_row, dict):
+                            row.update(supp_row)
                     
                     out_row = {c: "" for c in cols}
                     
@@ -142,7 +152,6 @@ def generate_from_edited():
 
                             out_row[template_col] = cleaned
                     
-                    # 应用手动补充列
                     for supp in manual_supplements:
                         if supp["column"] in cols:
                             out_row[supp["column"]] = supp["value"]
@@ -151,6 +160,11 @@ def generate_from_edited():
             else:
                 # 使用拆分后的数据
                 for idx, row in enumerate(table["data_rows"], 1):
+                    if "supplement_data_rows" in table and idx <= len(table["supplement_data_rows"]):
+                        supp_row = table["supplement_data_rows"][idx - 1]
+                        if isinstance(supp_row, dict):
+                            row = {**row, **supp_row}
+                    
                     out_row = {c: "" for c in cols}
                     
                     entry_value = ""
@@ -177,7 +191,6 @@ def generate_from_edited():
 
                             out_row[template_col] = cleaned
                     
-                    # 应用手动补充列
                     for supp in manual_supplements:
                         if supp["column"] in cols:
                             out_row[supp["column"]] = supp["value"]

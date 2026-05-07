@@ -239,6 +239,26 @@ def extract_conditions_from_note(note_text):
     if ligand_match:
         conditions['Catalyst Ligand Name 1'] = ligand_match.group(2).strip()
     
+    # 提取amount单位 (mmol/eq/mol/mg/g等)
+    amount_units = [
+        ('mmol', 'Reactant Ammount (mmol)'),
+        ('eq', 'Reactant Ammount (eq)'),
+        ('mol', 'Reactant Ammount (mmol)'),
+        ('mg', 'Reactant Ammount (mg)'),
+        ('g', 'Reactant Ammount (mg)'),
+        ('μmol', 'Reactant Ammount (mmol)'),
+    ]
+    found_amounts = []
+    for unit, template_col in amount_units:
+        pattern = rf'(\d+\.?\d*)\s*{unit}'
+        matches = re.findall(pattern, note_text, re.IGNORECASE)
+        for match in matches:
+            key = f'{template_col} {len(found_amounts) + 1}'
+            conditions[key] = match
+            found_amounts.append(key)
+    
+    conditions['_supplement_only'] = True
+    
     return conditions
 
 @llm_bp.route('/generate_supplement_table', methods=['POST'])
@@ -261,7 +281,7 @@ def generate_supplement_table():
     if not conditions:
         return jsonify({"status": "error", "msg": "未能从表注中提取到任何条件"})
     
-    supplement_columns = list(conditions.keys())
+    supplement_columns = [k for k in conditions.keys() if k != '_supplement_only']
     supplement_values = conditions
     
     # 生成补充表格数据

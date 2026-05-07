@@ -690,9 +690,20 @@ function renderFinalCSVPreview() {
 
         const autoMap = table.auto_map || {};
         const manualMap = table.manual_map || {};
-        const finalMap = {...autoMap, ...manualMap};
+        const suppAutoMap = table.supplement_auto_map || {};
+        const suppManualMap = table.supplement_manual_map || {};
+        const finalMap = {...autoMap, ...manualMap, ...suppAutoMap, ...suppManualMap};
 
         for (let idx = 0; idx < rowData.length; idx++) {
+            let row = {...rowData[idx]};
+
+            if (table.supplement_data_rows && idx < table.supplement_data_rows.length) {
+                const suppRow = table.supplement_data_rows[idx];
+                if (typeof suppRow === 'object') {
+                    row = {...row, ...suppRow};
+                }
+            }
+
             html += '<tr>';
 
             for (let i = 0; i < 4; i++) {
@@ -702,7 +713,7 @@ function renderFinalCSVPreview() {
                     if (hasEdited) {
                         value = rowData[idx]?.[col] || '';
                     } else {
-                        value = getEntryValue(rowData[idx], displayHeaders);
+                        value = getEntryValue(row, displayHeaders);
                         if (!value) {
                             value = `T${tId}_${idx + 1}`;
                         }
@@ -719,7 +730,6 @@ function renderFinalCSVPreview() {
                 const col = templateCols[i];
                 let value = '';
 
-                // 首先检查是否有手动补充列
                 const supplement = manualSupplements.find(s => s.column === col);
                 if (supplement) {
                     value = supplement.value;
@@ -727,8 +737,8 @@ function renderFinalCSVPreview() {
                     value = rowData[idx]?.[col] || '';
                 } else {
                     for (const [tableCol, templateCol] of Object.entries(finalMap)) {
-                        if (templateCol === col && tableCol in rowData[idx]) {
-                            value = rowData[idx][tableCol];
+                        if (templateCol === col && tableCol in row) {
+                            value = row[tableCol];
                         }
                     }
                 }

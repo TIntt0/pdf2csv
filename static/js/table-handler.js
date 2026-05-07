@@ -189,11 +189,6 @@ function renderDualColumnMap(t) {
             <input type="hidden" name="tid" value="${t.table_id}">
             
             <div class="row mb-3">
-                <div class="col-md-12">
-                    <h6 class="text-primary border-bottom pb-2 mb-2">📋 ${t.use_original ? '原始' : '修正后'}表格列映射</h6>
-                </div>
-            </div>
-            <div class="row mb-3">
     `;
 
     // 原始表格列映射
@@ -212,24 +207,13 @@ function renderDualColumnMap(t) {
         `;
     });
 
-    html += `</div>`;
-
-    // 如果有补充表格，显示补充表格列映射
+    // 补充表格列映射（与原始表格列一起显示）
     if (t.supplement_headers && t.supplement_headers.length > 0) {
-        html += `
-            <div class="row mt-4 mb-3">
-                <div class="col-md-12">
-                    <h6 class="text-success border-bottom pb-2 mb-2">🔄 LLM补充表格列映射</h6>
-                </div>
-            </div>
-            <div class="row mb-3">
-        `;
-
         t.supplement_headers.forEach(h => {
             const current_map = supp_manual_map[h] || supp_auto_map[h] || '';
             html += `
                 <div class="col-md-6 mb-2">
-                    <label class="form-label small fw-bold">${h}</label>
+                    <label class="form-label small fw-bold text-success">${h} <small>(补充)</small></label>
                     <select name="supp_map_${h}" class="form-select form-select-sm">
                         <option value="">--不映射--</option>
                         ${template_cols.map(c => `
@@ -239,10 +223,9 @@ function renderDualColumnMap(t) {
                 </div>
             `;
         });
-
-        html += `</div>`;
     }
 
+    html += `</div>`;
     html += `</form>`;
     mapConfigEl.innerHTML = html;
     if (typeof renderMathContent === 'function') {
@@ -255,7 +238,23 @@ async function saveCurrentMap() {
     if (!form) return alert('表单未加载');
 
     try {
-        // 保存列映射
+        // 从表单中读取补充表格的手动映射
+        const formData = new FormData(form);
+        const supplement_manual_map = {};
+        for (let [key, val] of formData.entries()) {
+            if (key.startsWith('supp_map_') && val) {
+                const col = key.replace('supp_map_', '');
+                supplement_manual_map[col] = val;
+            }
+        }
+        
+        // 更新前端数据
+        const t = tables.find(x => x.table_id === currentTableId);
+        if (t) {
+            t.supplement_manual_map = supplement_manual_map;
+        }
+        
+        // 保存列映射（包括原始表格和补充表格的映射）
         const response = await fetch('/table/save_map', {
             method: 'POST',
             body: new FormData(form)
@@ -267,8 +266,7 @@ async function saveCurrentMap() {
             return;
         }
         
-        // 保存手动补充列
-        const t = tables.find(x => x.table_id === currentTableId);
+        // 保存补充表格数据
         if (t) {
             const supplementsResponse = await fetch('/table/save_supplements', {
                 method: 'POST',
@@ -278,7 +276,11 @@ async function saveCurrentMap() {
                 body: JSON.stringify({
                     fid: fid,
                     tid: currentTableId,
-                    supplements: t.manual_supplements || []
+                    supplements: t.manual_supplements || [],
+                    supplement_data_rows: t.supplement_data_rows || [],
+                    supplement_headers: t.supplement_headers || [],
+                    supplement_auto_map: t.supplement_auto_map || {},
+                    supplement_manual_map: t.supplement_manual_map || {}
                 })
             });
             const supplementsResult = await supplementsResponse.json();
@@ -302,6 +304,25 @@ async function saveCurrentMap() {
         alert('保存失败');
         console.error(err);
     }
+}
+
+// 将补充表格数据保存到表格中（不在预览中显示，仅导出时使用）
+function mergeSupplementData(tableIndex) {
+    const table = tables[tableIndex];
+    if (!table || !table.supplement_data_rows || !table.supplement_headers) {
+        return;
+    }
+    
+    // 确保补充表格的映射对象存在
+    if (!table.supplement_auto_map) {
+        table.supplement_auto_map = {};
+    }
+    if (!table.supplement_manual_map) {
+        table.supplement_manual_map = {};
+    }
+    
+    // 注意：supplement_auto_map 已经在后端设置好，不要在前端覆盖
+    // 这里只需要确保数据结构完整即可
 }
 
 // 模态框相关函数
@@ -334,10 +355,6 @@ function generateSupplementTable() {
     if (!t) return;
     
     const rowCount = t.data_rows ? t.data_rows.length : 0;
-    if (rowCount === 0) {
-        alert('当前表格没有数据行');
-        return;
-    }
     
     const btn = document.getElementById('generateSupplementBtn');
     btn.disabled = true;
@@ -355,7 +372,7 @@ function generateSupplementTable() {
         })
     })
     .then(response => response.json())
-    .then(data => {
+    .then(async data => {
         if (data.status === 'success') {
             // 更新本地表格数据
             const tableIndex = tables.findIndex(x => x.table_id === currentTableId);
@@ -364,6 +381,25 @@ function generateSupplementTable() {
                 tables[tableIndex].supplement_data_rows = data.supplement_data;
                 tables[tableIndex].supplement_auto_map = data.supplement_auto_map || {};
                 tables[tableIndex].supplement_manual_map = {};
+                
+                // 将补充表格数据合并到主表格中
+                mergeSupplementData(tableIndex);
+                
+                // 保存到后端
+                const t = tables[tableIndex];
+                await fetch('/table/save_supplements', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        fid: fid,
+                        tid: currentTableId,
+                        supplements: t.manual_supplements || [],
+                        supplement_data_rows: t.supplement_data_rows || [],
+                        supplement_headers: t.supplement_headers || [],
+                        supplement_auto_map: t.supplement_auto_map || {},
+                        supplement_manual_map: t.supplement_manual_map || {}
+                    })
+                });
                 
                 // 重新渲染
                 switchTable(currentTableId);
